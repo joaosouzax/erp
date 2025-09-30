@@ -3,31 +3,33 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Sistema ERP - Multiusuários</title>
+<title>Sistema ERP - Fogos</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
+<!-- Biblioteca para scanner (QR/barcode) -->
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <style>
-/* (mantive seu CSS anterior, adicionei só ajustes) */
-body { font-family: 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg,#667eea 0%,#764ba2 100%); min-height: 100vh; margin:0; }
-header { background:linear-gradient(135deg,#667eea,#764ba2); color:white; padding:14px 20px; border-radius:10px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; }
-.nav-tabs { margin:14px 0; display:flex; gap:8px; flex-wrap:wrap; }
-.tab { padding:10px 16px; border-radius:8px; background:white; border:none; cursor:pointer; }
-.tab.active { background:linear-gradient(135deg,#667eea,#764ba2); color:white; }
-.content { background:white; padding:18px; border-radius:10px; }
-table { width:100%; border-collapse:collapse; margin-top:12px; }
-th,td { padding:8px; border-bottom:1px solid #ddd; text-align:left; }
-.btn-danger { background:#dc2626; color:white; border:none; padding:6px 10px; border-radius:6px; cursor:pointer; }
-.btn-success { background:#059669; color:white; border:none; padding:6px 10px; border-radius:6px; cursor:pointer; }
+body { font-family: Arial, sans-serif; margin:0; background:#f4f4f4; }
+header { background:#667eea; color:white; padding:10px; display:flex; justify-content:space-between; }
+.nav-tabs { display:flex; gap:6px; background:#fff; padding:6px; }
+.tab { padding:6px 10px; border:none; border-radius:6px; cursor:pointer; }
+.tab.active { background:#667eea; color:white; }
+.content { padding:12px; background:#fff; margin:10px; border-radius:8px; }
+.btn { padding:6px 10px; border:none; border-radius:6px; cursor:pointer; }
+.btn-success { background:#059669; color:white; }
+.btn-danger { background:#dc2626; color:white; }
+table { width:100%; border-collapse:collapse; margin-top:8px; }
+th,td { padding:8px; border-bottom:1px solid #ddd; }
 </style>
 </head>
 <body>
 <!-- LOGIN -->
 <div id="loginPage" style="display:flex;justify-content:center;align-items:center;height:100vh;">
-  <div style="background:white;padding:20px;border-radius:8px;width:100%;max-width:400px;">
+  <div style="background:#fff;padding:20px;border-radius:8px;max-width:400px;width:100%;">
     <h2>Login ERP</h2>
     <form id="loginForm">
-      <input id="username" placeholder="Usuário" required style="width:100%;margin:6px 0;"><br>
-      <input id="password" type="password" placeholder="Senha" required style="width:100%;margin:6px 0;"><br>
-      <button type="submit" class="btn-success" style="width:100%;">Entrar</button>
+      <input id="username" placeholder="Usuário" required style="width:100%;margin:6px 0;">
+      <input id="password" type="password" placeholder="Senha" required style="width:100%;margin:6px 0;">
+      <button type="submit" class="btn btn-success" style="width:100%;">Entrar</button>
     </form>
     <div id="errorMessage" style="color:#dc2626;margin-top:8px;"></div>
     <div style="margin-top:10px;font-size:14px;color:#333;">
@@ -37,23 +39,24 @@ th,td { padding:8px; border-bottom:1px solid #ddd; text-align:left; }
 </div>
 
 <!-- SISTEMA -->
-<div id="erpSystem" style="display:none;padding:20px;">
+<div id="erpSystem" style="display:none;">
   <header>
-    <h1>ERP Sistema</h1>
+    <h1>ERP Fogos</h1>
     <div id="currentUserDisplay"></div>
-    <button onclick="logout()" class="btn-danger" id="logoutBtn" style="display:none;">Sair</button>
+    <button onclick="logout()" class="btn btn-danger" id="logoutBtn" style="display:none;">Sair</button>
   </header>
 
   <div class="nav-tabs">
     <button class="tab active" onclick="switchTab('dashboard')">Dashboard</button>
     <button class="tab" onclick="switchTab('products')">Produtos</button>
     <button class="tab" onclick="switchTab('movements')">Movimentações</button>
+    <button class="tab" onclick="switchTab('scanner')">Scanner</button>
     <button class="tab" onclick="switchTab('users')">Usuários</button>
   </div>
 
   <div class="content">
     <!-- DASHBOARD -->
-    <div id="dashboard" class="tab-content">Bem-vindo ao ERP!</div>
+    <div id="dashboard" class="tab-content">Bem-vindo ao ERP Fogos!</div>
 
     <!-- PRODUTOS -->
     <div id="products" class="tab-content" style="display:none;">
@@ -62,21 +65,28 @@ th,td { padding:8px; border-bottom:1px solid #ddd; text-align:left; }
         <input id="sku" placeholder="SKU" required>
         <input id="name" placeholder="Nome" required>
         <input id="quantity" type="number" min="0" required>
-        <button class="btn-success">Cadastrar</button>
+        <button class="btn btn-success">Cadastrar</button>
       </form>
       <table id="productsTable"><thead><tr><th>ID</th><th>SKU</th><th>Nome</th><th>Qtd</th><th>Ações</th></tr></thead><tbody></tbody></table>
     </div>
 
     <!-- MOVIMENTAÇÕES -->
     <div id="movements" class="tab-content" style="display:none;">
-      <h3>Registrar Movimentação</h3>
+      <h3>Movimentações</h3>
       <form id="movementForm">
         <select id="movProductId"></select>
         <select id="movType"><option value="ENTRADA">Entrada</option><option value="SAIDA">Saída</option></select>
         <input id="movQuantity" type="number" min="1" required>
-        <button class="btn-success">Registrar</button>
+        <button class="btn btn-success">Registrar</button>
       </form>
       <table id="movementsTable"><thead><tr><th>ID</th><th>Produto</th><th>Tipo</th><th>Qtd</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <!-- SCANNER -->
+    <div id="scanner" class="tab-content" style="display:none;">
+      <h3>Escanear Produto</h3>
+      <div id="reader" style="width:300px;height:300px;"></div>
+      <div id="scanResult" style="margin-top:10px;color:green;font-weight:bold;"></div>
     </div>
 
     <!-- USUÁRIOS -->
@@ -85,12 +95,8 @@ th,td { padding:8px; border-bottom:1px solid #ddd; text-align:left; }
       <form id="userForm">
         <input id="newUser" placeholder="Usuário" required>
         <input id="newPass" placeholder="Senha" required>
-        <select id="newRole">
-          <option value="admin">Admin</option>
-          <option value="estoquista">Estoquista</option>
-          <option value="vendedor">Vendedor</option>
-        </select>
-        <button class="btn-success">Adicionar</button>
+        <select id="newRole"><option value="admin">Admin</option><option value="estoquista">Estoquista</option><option value="vendedor">Vendedor</option></select>
+        <button class="btn btn-success">Adicionar</button>
       </form>
       <table id="usersTable"><thead><tr><th>ID</th><th>Usuário</th><th>Papel</th><th>Ações</th></tr></thead><tbody></tbody></table>
     </div>
@@ -98,13 +104,19 @@ th,td { padding:8px; border-bottom:1px solid #ddd; text-align:left; }
 </div>
 
 <script>
-/* ===== Dados locais ===== */
+/* ===== Usuários ===== */
 let users = [
   {id:1, username:"admin", password:sha256("admin123"), role:"admin"},
   {id:2, username:"estoquista", password:sha256("1234"), role:"estoquista"},
   {id:3, username:"vendedor", password:sha256("venda"), role:"vendedor"}
 ];
-let products=[], movements=[];
+let products=[
+  {id:1,sku:"789000000001",name:"Rojão Trovão",quantity:100},
+  {id:2,sku:"789000000002",name:"Morteiro 3 Pol",quantity:50},
+  {id:3,sku:"789000000003",name:"Chuva de Prata",quantity:30},
+  {id:4,sku:"789000000004",name:"Foguete 12 tiros",quantity:80}
+];
+let movements=[];
 let currentUser=null;
 
 /* ===== Login ===== */
@@ -122,14 +134,14 @@ document.getElementById("loginForm").addEventListener("submit",e=>{
     updateUI();
   } else {
     document.getElementById("errorMessage").innerText="Usuário ou senha incorretos.";
-    document.getElementById("errorMessage").style.display="block";
   }
 });
-function logout(){
-  currentUser=null;
-  document.getElementById("loginPage").style.display="flex";
-  document.getElementById("erpSystem").style.display="none";
-}
+function logout(){ currentUser=null; location.reload(); }
+
+/* ===== Hierarquia ===== */
+function canManageUsers(){ return currentUser && currentUser.role==="admin"; }
+function canManageProducts(){ return currentUser && (currentUser.role==="admin"||currentUser.role==="estoquista"); }
+function canRegisterMovements(){ return currentUser && (currentUser.role==="admin"||currentUser.role==="estoquista"||currentUser.role==="vendedor"); }
 
 /* ===== UI ===== */
 function switchTab(tab){
@@ -137,13 +149,16 @@ function switchTab(tab){
   document.querySelectorAll(".tab-content").forEach(c=>c.style.display="none");
   document.getElementById(tab).style.display="block";
   event.target.classList.add("active");
+  if(tab==="users" && !canManageUsers()){ alert("Acesso negado: apenas admin."); switchTab("dashboard"); }
+  if(tab==="products" && !canManageProducts()){ alert("Acesso negado."); switchTab("dashboard"); }
+  if(tab==="movements" && !canRegisterMovements()){ alert("Acesso negado."); switchTab("dashboard"); }
 }
 function updateUI(){ updateUsers(); updateProducts(); updateMovements(); updateSelects(); }
 
 /* ===== Usuários ===== */
 document.getElementById("userForm").addEventListener("submit",e=>{
   e.preventDefault();
-  if(currentUser.role!=="admin"){ alert("Apenas admin pode criar usuários."); return; }
+  if(!canManageUsers()){ alert("Apenas admin pode criar usuários."); return; }
   const id=users.length?Math.max(...users.map(x=>x.id))+1:1;
   const u=document.getElementById("newUser").value;
   const p=sha256(document.getElementById("newPass").value);
@@ -152,43 +167,39 @@ document.getElementById("userForm").addEventListener("submit",e=>{
   updateUsers();
   e.target.reset();
 });
-function delUser(id){
-  if(currentUser.role!=="admin"){ alert("Apenas admin pode excluir usuários."); return; }
-  users=users.filter(u=>u.id!==id);
-  updateUsers();
-}
+function delUser(id){ if(!canManageUsers()){alert("Apenas admin.");return;} users=users.filter(u=>u.id!==id); updateUsers(); }
 function updateUsers(){
   const tb=document.querySelector("#usersTable tbody");
-  tb.innerHTML=users.map(u=>`<tr><td>${u.id}</td><td>${u.username}</td><td>${u.role}</td>
-  <td><button class="btn-danger" onclick="delUser(${u.id})">Excluir</button></td></tr>`).join("");
+  tb.innerHTML=users.map(u=>`<tr><td>${u.id}</td><td>${u.username}</td><td>${u.role}</td><td><button class="btn btn-danger" onclick="delUser(${u.id})">Excluir</button></td></tr>`).join("");
 }
 
 /* ===== Produtos ===== */
 document.getElementById("productForm").addEventListener("submit",e=>{
   e.preventDefault();
+  if(!canManageProducts()){ alert("Sem permissão."); return; }
   const id=products.length?Math.max(...products.map(x=>x.id))+1:1;
   products.push({id,sku:document.getElementById("sku").value,name:document.getElementById("name").value,quantity:parseInt(document.getElementById("quantity").value)});
-  updateProducts();
-  updateSelects();
-  e.target.reset();
+  updateProducts(); updateSelects(); e.target.reset();
 });
-function delProduct(id){ if(currentUser.role!=="admin"){alert("Apenas admin");return;} products=products.filter(p=>p.id!==id); updateProducts(); }
+function delProduct(id){ if(!canManageProducts()){alert("Sem permissão.");return;} products=products.filter(p=>p.id!==id); updateProducts(); }
 function updateProducts(){
   const tb=document.querySelector("#productsTable tbody");
-  tb.innerHTML=products.map(p=>`<tr><td>${p.id}</td><td>${p.sku}</td><td>${p.name}</td><td>${p.quantity}</td>
-  <td><button class="btn-danger" onclick="delProduct(${p.id})">Excluir</button></td></tr>`).join("");
+  tb.innerHTML=products.map(p=>`<tr><td>${p.id}</td><td>${p.sku}</td><td>${p.name}</td><td>${p.quantity}</td><td>${canManageProducts()?`<button class="btn btn-danger" onclick="delProduct(${p.id})">Excluir</button>`:""}</td></tr>`).join("");
 }
 
 /* ===== Movimentações ===== */
 document.getElementById("movementForm").addEventListener("submit",e=>{
   e.preventDefault();
+  if(!canRegisterMovements()){ alert("Sem permissão."); return; }
   const id=movements.length?Math.max(...movements.map(x=>x.id))+1:1;
   const pid=parseInt(document.getElementById("movProductId").value);
   const type=document.getElementById("movType").value;
   const qty=parseInt(document.getElementById("movQuantity").value);
+  const prod=products.find(p=>p.id===pid);
+  if(type==="SAIDA" && prod.quantity<qty){ alert("Estoque insuficiente!"); return; }
   movements.push({id,productId:pid,type,quantity:qty});
-  updateMovements();
-  e.target.reset();
+  prod.quantity+= (type==="ENTRADA"?qty:-qty);
+  updateProducts(); updateMovements(); e.target.reset();
 });
 function updateMovements(){
   const tb=document.querySelector("#movementsTable tbody");
@@ -201,7 +212,29 @@ function updateSelects(){
   const sel=document.getElementById("movProductId");
   sel.innerHTML='<option value="">Selecione</option>'+products.map(p=>`<option value="${p.id}">${p.name}</option>`).join("");
 }
+
+/* ===== Scanner ===== */
+function startScanner(){
+  const html5QrCode = new Html5Qrcode("reader");
+  html5QrCode.start({ facingMode: "environment" }, { fps:10, qrbox:250 },
+    (decodedText)=>{
+      document.getElementById("scanResult").innerText="Código: "+decodedText;
+      let prod=products.find(p=>p.sku===decodedText);
+      if(prod){ // abate uma unidade
+        if(prod.quantity>0){ prod.quantity--; updateProducts(); updateMovements();
+          alert("Produto vendido: "+prod.name);
+        } else { alert("Sem estoque!"); }
+      } else {
+        // cadastra novo
+        const id=products.length?Math.max(...products.map(x=>x.id))+1:1;
+        products.push({id,sku:decodedText,name:"Novo Produto",quantity:1});
+        updateProducts();
+        alert("Novo produto cadastrado com SKU: "+decodedText);
+      }
+    },
+    (errorMsg)=>{});
+}
+document.addEventListener("DOMContentLoaded",()=>{ if(document.getElementById("scanner")) startScanner(); });
 </script>
 </body>
 </html>
-
