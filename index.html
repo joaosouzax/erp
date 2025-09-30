@@ -6,8 +6,6 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static(__dirname + "/public"));
-
 // ===== Estado compartilhado =====
 let users = [
   { id: 1, username: "admin", password: "admin123", role: "admin" },
@@ -24,36 +22,9 @@ let products = [
 
 let movements = [];
 
-// ===== WebSocket =====
-io.on("connection", (socket) => {
-  console.log("Cliente conectado");
-
-  // envia estado inicial
-  socket.emit("init", { users, products, movements });
-
-  socket.on("updateUsers", (newUsers) => {
-    users = newUsers;
-    io.emit("updateUsers", users);
-  });
-
-  socket.on("updateProducts", (newProducts) => {
-    products = newProducts;
-    io.emit("updateProducts", products);
-  });
-
-  socket.on("updateMovements", (newMovs) => {
-    movements = newMovs;
-    io.emit("updateMovements", movements);
-  });
-
-  socket.on("disconnect", () => {
-    console.log("Cliente saiu");
-  });
-});
-
-server.listen(3000, () => {
-  console.log("Servidor rodando em http://localhost:3000");
-});
+// ===== Página única =====
+app.get("/", (req, res) => {
+  res.send(`
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -63,12 +34,21 @@ server.listen(3000, () => {
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <script src="/socket.io/socket.io.js"></script>
 <style>
-/* ... (mantém o CSS anterior) ... */
-.edit-box { background:#f9fafb; padding:10px; margin-top:8px; border:1px solid #ddd; border-radius:6px; }
+body{font-family:Arial,sans-serif;margin:0;background:#f4f4f4;}
+header{background:#667eea;color:white;padding:10px;display:flex;justify-content:space-between;}
+.nav-tabs{display:flex;gap:6px;background:#fff;padding:6px;}
+.tab{padding:6px 10px;border:none;border-radius:6px;cursor:pointer;}
+.tab.active{background:#667eea;color:white;}
+.content{padding:12px;background:#fff;margin:10px;border-radius:8px;}
+.btn{padding:6px 10px;border:none;border-radius:6px;cursor:pointer;}
+.btn-success{background:#059669;color:white;}
+.btn-danger{background:#dc2626;color:white;}
+table{width:100%;border-collapse:collapse;margin-top:8px;}
+th,td{padding:8px;border-bottom:1px solid #ddd;}
+.edit-box{background:#f9fafb;padding:10px;margin-top:8px;border:1px solid #ddd;border-radius:6px;}
 </style>
 </head>
 <body>
-<!-- LOGIN -->
 <div id="loginPage" style="display:flex;justify-content:center;align-items:center;height:100vh;">
   <div style="background:#fff;padding:20px;border-radius:8px;max-width:400px;width:100%;">
     <h2>Login ERP</h2>
@@ -81,7 +61,6 @@ server.listen(3000, () => {
   </div>
 </div>
 
-<!-- SISTEMA -->
 <div id="erpSystem" style="display:none;">
   <header>
     <h1>ERP Fogos</h1>
@@ -98,9 +77,36 @@ server.listen(3000, () => {
   </div>
 
   <div class="content">
-    <!-- ... outras abas ... -->
+    <div id="dashboard" class="tab-content">Bem-vindo ao ERP Fogos!</div>
 
-    <!-- USUÁRIOS -->
+    <div id="products" class="tab-content" style="display:none;">
+      <h3>Produtos</h3>
+      <form id="productForm">
+        <input id="sku" placeholder="SKU" required>
+        <input id="name" placeholder="Nome" required>
+        <input id="quantity" type="number" min="0" required>
+        <button class="btn btn-success">Cadastrar</button>
+      </form>
+      <table id="productsTable"><thead><tr><th>ID</th><th>SKU</th><th>Nome</th><th>Qtd</th><th>Ações</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div id="movements" class="tab-content" style="display:none;">
+      <h3>Movimentações</h3>
+      <form id="movementForm">
+        <select id="movProductId"></select>
+        <select id="movType"><option value="ENTRADA">Entrada</option><option value="SAIDA">Saída</option></select>
+        <input id="movQuantity" type="number" min="1" required>
+        <button class="btn btn-success">Registrar</button>
+      </form>
+      <table id="movementsTable"><thead><tr><th>ID</th><th>Produto</th><th>Tipo</th><th>Qtd</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div id="scanner" class="tab-content" style="display:none;">
+      <h3>Escanear Produto</h3>
+      <div id="reader" style="width:300px;height:300px;"></div>
+      <div id="scanResult" style="margin-top:10px;color:green;font-weight:bold;"></div>
+    </div>
+
     <div id="users" class="tab-content" style="display:none;">
       <h3>Usuários</h3>
       <form id="userForm">
@@ -111,7 +117,6 @@ server.listen(3000, () => {
       </form>
       <table id="usersTable"><thead><tr><th>ID</th><th>Usuário</th><th>Papel</th><th>Ações</th></tr></thead><tbody></tbody></table>
 
-      <!-- Caixa de edição -->
       <div id="editUserBox" class="edit-box" style="display:none;">
         <h4>Editar Usuário</h4>
         <input id="editUserName" placeholder="Usuário">
@@ -130,30 +135,54 @@ let users=[], products=[], movements=[];
 let currentUser=null;
 let editingUserId=null;
 
-/* ===== Login e hierarquia (igual antes) ===== */
-// ... (mantém as funções de login, logout, permissões e navegação) ...
+// ===== Login =====
+document.getElementById("loginForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  const u=document.getElementById("username").value;
+  const p=document.getElementById("password").value;
+  const found=users.find(x=>x.username===u && x.password===p);
+  if(found){
+    currentUser=found;
+    document.getElementById("loginPage").style.display="none";
+    document.getElementById("erpSystem").style.display="block";
+    document.getElementById("logoutBtn").style.display="inline-block";
+    document.getElementById("currentUserDisplay").innerText=\`👤 \${currentUser.username} (\${currentUser.role})\`;
+    updateUI();
+  } else {
+    document.getElementById("errorMessage").innerText="Usuário ou senha incorretos.";
+  }
+});
+function logout(){ currentUser=null; location.reload(); }
 
-/* ===== Usuários ===== */
+// ===== Permissões =====
+function canManageUsers(){ return currentUser && currentUser.role==="admin"; }
+function canManageProducts(){ return currentUser && ["admin","estoquista"].includes(currentUser.role); }
+function canRegisterMovements(){ return currentUser && ["admin","estoquista","vendedor"].includes(currentUser.role); }
+
+// ===== Tabs =====
+function switchTab(tab){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  document.querySelectorAll(".tab-content").forEach(c=>c.style.display="none");
+  document.getElementById(tab).style.display="block";
+  event.target.classList.add("active");
+  if(tab==="users" && !canManageUsers()){ alert("Apenas admin."); switchTab("dashboard"); }
+  if(tab==="products" && !canManageProducts()){ alert("Sem permissão."); switchTab("dashboard"); }
+  if(tab==="movements" && !canRegisterMovements()){ alert("Sem permissão."); switchTab("dashboard"); }
+}
+
+// ===== Atualização UI =====
+function updateUI(){ updateUsers(); updateProducts(); updateMovements(); updateSelects(); }
+
+// ===== Usuários =====
 document.getElementById("userForm").addEventListener("submit",e=>{
   e.preventDefault();
   if(!canManageUsers()){alert("Apenas admin.");return;}
   const id=users.length?Math.max(...users.map(x=>x.id))+1:1;
-  users.push({
-    id,
-    username:document.getElementById("newUser").value,
-    password:document.getElementById("newPass").value,
-    role:document.getElementById("newRole").value
-  });
+  users.push({id,username:document.getElementById("newUser").value,password:document.getElementById("newPass").value,role:document.getElementById("newRole").value});
   socket.emit("updateUsers",users);
   e.target.reset();
 });
-
-function delUser(id){
-  if(!canManageUsers()){alert("Apenas admin.");return;}
-  users=users.filter(u=>u.id!==id);
-  socket.emit("updateUsers",users);
-}
-
+function delUser(id){ if(!canManageUsers()){alert("Apenas admin.");return;} users=users.filter(u=>u.id!==id); socket.emit("updateUsers",users); }
 function editUser(id){
   if(!canManageUsers()){alert("Apenas admin.");return;}
   const u=users.find(x=>x.id===id);
@@ -164,38 +193,113 @@ function editUser(id){
   document.getElementById("editUserRole").value=u.role;
   document.getElementById("editUserBox").style.display="block";
 }
-
 function saveUserEdit(){
   const u=users.find(x=>x.id===editingUserId);
   if(!u) return;
   u.username=document.getElementById("editUserName").value;
   const pass=document.getElementById("editUserPass").value;
-  if(pass) u.password=pass; // só troca se informado
+  if(pass) u.password=pass;
   u.role=document.getElementById("editUserRole").value;
   socket.emit("updateUsers",users);
   cancelUserEdit();
 }
-
-function cancelUserEdit(){
-  editingUserId=null;
-  document.getElementById("editUserBox").style.display="none";
-}
-
+function cancelUserEdit(){ editingUserId=null; document.getElementById("editUserBox").style.display="none"; }
 function updateUsers(){
   const tb=document.querySelector("#usersTable tbody");
   tb.innerHTML=users.map(u=>
-    `<tr><td>${u.id}</td><td>${u.username}</td><td>${u.role}</td>
+    \`<tr><td>\${u.id}</td><td>\${u.username}</td><td>\${u.role}</td>
     <td>
-      ${canManageUsers()?`<button class="btn btn-success" onclick="editUser(${u.id})">Editar</button>`:""}
-      ${canManageUsers()?`<button class="btn btn-danger" onclick="delUser(${u.id})">Excluir</button>`:""}
-    </td></tr>`
+      \${canManageUsers()?`<button class="btn btn-success" onclick="editUser(\${u.id})">Editar</button>`:""}
+      \${canManageUsers()?`<button class="btn btn-danger" onclick="delUser(\${u.id})">Excluir</button>`:""}
+    </td></tr>\`
   ).join("");
 }
 
-/* ===== Produtos, Movimentações, Scanner, Sync ===== */
-// ... (mantém as funções que já passei na versão anterior: updateProducts, updateMovements, scanner, socket.on etc.) ...
+// ===== Produtos =====
+document.getElementById("productForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  if(!canManageProducts()){alert("Sem permissão.");return;}
+  const id=products.length?Math.max(...products.map(x=>x.id))+1:1;
+  products.push({id,sku:document.getElementById("sku").value,name:document.getElementById("name").value,quantity:parseInt(document.getElementById("quantity").value)});
+  socket.emit("updateProducts",products);
+  e.target.reset();
+});
+function delProduct(id){ if(!canManageProducts()){alert("Sem permissão.");return;} products=products.filter(p=>p.id!==id); socket.emit("updateProducts",products); }
+function updateProducts(){
+  const tb=document.querySelector("#productsTable tbody");
+  tb.innerHTML=products.map(p=>\`<tr><td>\${p.id}</td><td>\${p.sku}</td><td>\${p.name}</td><td>\${p.quantity}</td><td>\${canManageProducts()?`<button class="btn btn-danger" onclick="delProduct(\${p.id})">Excluir</button>`:""}</td></tr>\`).join("");
+}
+
+// ===== Movimentações =====
+document.getElementById("movementForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  if(!canRegisterMovements()){alert("Sem permissão.");return;}
+  const id=movements.length?Math.max(...movements.map(x=>x.id))+1:1;
+  const pid=parseInt(document.getElementById("movProductId").value);
+  const type=document.getElementById("movType").value;
+  const qty=parseInt(document.getElementById("movQuantity").value);
+  const prod=products.find(p=>p.id===pid);
+  if(type==="SAIDA" && prod.quantity<qty){ alert("Estoque insuficiente!"); return; }
+  movements.push({id,productId:pid,type,quantity:qty});
+  prod.quantity+=(type==="ENTRADA"?qty:-qty);
+  socket.emit("updateMovements",movements);
+  socket.emit("updateProducts",products);
+  e.target.reset();
+});
+function updateMovements(){
+  const tb=document.querySelector("#movementsTable tbody");
+  tb.innerHTML=movements.map(m=>{
+    const prod=products.find(p=>p.id===m.productId);
+    return \`<tr><td>\${m.id}</td><td>\${prod?prod.name:"N/A"}</td><td>\${m.type}</td><td>\${m.quantity}</td></tr>\`;
+  }).join("");
+}
+function updateSelects(){
+  const sel=document.getElementById("movProductId");
+  sel.innerHTML='<option value="">Selecione</option>'+products.map(p=>\`<option value="\${p.id}">\${p.name}</option>\`).join("");
+}
+
+// ===== Scanner =====
+function startScanner(){
+  const html5QrCode=new Html5Qrcode("reader");
+  html5QrCode.start({facingMode:"environment"},{fps:10,qrbox:250},
+    (decodedText)=>{
+      document.getElementById("scanResult").innerText="Código: "+decodedText;
+      let prod=products.find(p=>p.sku===decodedText);
+      if(prod){
+        if(prod.quantity>0){
+          prod.quantity--;
+          movements.push({id:movements.length+1,productId:prod.id,type:"SAIDA",quantity:1});
+          socket.emit("updateProducts",products);
+          socket.emit("updateMovements",movements);
+          alert("Produto vendido: "+prod.name);
+        } else { alert("Sem estoque!"); }
+      } else {
+        const id=products.length?Math.max(...products.map(x=>x.id))+1:1;
+        products.push({id,sku:decodedText,name:"Novo Produto",quantity:1});
+        socket.emit("updateProducts",products);
+        alert("Novo produto cadastrado: "+decodedText);
+      }
+    },err=>{});
+}
+document.addEventListener("DOMContentLoaded",()=>{ if(document.getElementById("scanner")) startScanner(); });
+
+// ===== Socket.IO sync =====
+socket.on("init",data=>{ users=data.users; products=data.products; movements=data.movements; updateUI(); });
+socket.on("updateUsers",u=>{ users=u; updateUsers(); });
+socket.on("updateProducts",p=>{ products=p; updateProducts(); updateSelects(); });
+socket.on("updateMovements",m=>{ movements=m; updateMovements(); });
 </script>
 </body>
 </html>
+  `);
+});
 
+// ===== WebSocket =====
+io.on("connection", (socket) => {
+  socket.emit("init", { users, products, movements });
+  socket.on("updateUsers", (newUsers) => { users=newUsers; io.emit("updateUsers",users); });
+  socket.on("updateProducts", (newProducts) => { products=newProducts; io.emit("updateProducts",products); });
+  socket.on("updateMovements", (newMovs) => { movements=newMovs; io.emit("updateMovements",movements); });
+});
 
+server.listen(3000, () => console.log("Rodando em http://localhost:3000"));
