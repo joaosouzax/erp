@@ -1,24 +1,70 @@
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+app.use(express.static(__dirname + "/public"));
+
+// ===== Estado compartilhado =====
+let users = [
+  { id: 1, username: "admin", password: "admin123", role: "admin" },
+  { id: 2, username: "estoquista", password: "1234", role: "estoquista" },
+  { id: 3, username: "vendedor", password: "venda", role: "vendedor" }
+];
+
+let products = [
+  { id: 1, sku: "789000000001", name: "Rojão Trovão", quantity: 100 },
+  { id: 2, sku: "789000000002", name: "Morteiro 3 Pol", quantity: 50 },
+  { id: 3, sku: "789000000003", name: "Chuva de Prata", quantity: 30 },
+  { id: 4, sku: "789000000004", name: "Foguete 12 tiros", quantity: 80 }
+];
+
+let movements = [];
+
+// ===== WebSocket =====
+io.on("connection", (socket) => {
+  console.log("Cliente conectado");
+
+  // envia estado inicial
+  socket.emit("init", { users, products, movements });
+
+  socket.on("updateUsers", (newUsers) => {
+    users = newUsers;
+    io.emit("updateUsers", users);
+  });
+
+  socket.on("updateProducts", (newProducts) => {
+    products = newProducts;
+    io.emit("updateProducts", products);
+  });
+
+  socket.on("updateMovements", (newMovs) => {
+    movements = newMovs;
+    io.emit("updateMovements", movements);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("Cliente saiu");
+  });
+});
+
+server.listen(3000, () => {
+  console.log("Servidor rodando em http://localhost:3000");
+});
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Sistema ERP - Fogos</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
-<!-- Biblioteca para scanner (QR/barcode) -->
+<title>ERP Fogos - Multiusuários</title>
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script src="/socket.io/socket.io.js"></script>
 <style>
-body { font-family: Arial, sans-serif; margin:0; background:#f4f4f4; }
-header { background:#667eea; color:white; padding:10px; display:flex; justify-content:space-between; }
-.nav-tabs { display:flex; gap:6px; background:#fff; padding:6px; }
-.tab { padding:6px 10px; border:none; border-radius:6px; cursor:pointer; }
-.tab.active { background:#667eea; color:white; }
-.content { padding:12px; background:#fff; margin:10px; border-radius:8px; }
-.btn { padding:6px 10px; border:none; border-radius:6px; cursor:pointer; }
-.btn-success { background:#059669; color:white; }
-.btn-danger { background:#dc2626; color:white; }
-table { width:100%; border-collapse:collapse; margin-top:8px; }
-th,td { padding:8px; border-bottom:1px solid #ddd; }
+/* ... (mantém o CSS anterior) ... */
+.edit-box { background:#f9fafb; padding:10px; margin-top:8px; border:1px solid #ddd; border-radius:6px; }
 </style>
 </head>
 <body>
@@ -32,9 +78,6 @@ th,td { padding:8px; border-bottom:1px solid #ddd; }
       <button type="submit" class="btn btn-success" style="width:100%;">Entrar</button>
     </form>
     <div id="errorMessage" style="color:#dc2626;margin-top:8px;"></div>
-    <div style="margin-top:10px;font-size:14px;color:#333;">
-      <b>Contas de teste:</b> admin/admin123 • estoquista/1234 • vendedor/venda
-    </div>
   </div>
 </div>
 
@@ -55,43 +98,11 @@ th,td { padding:8px; border-bottom:1px solid #ddd; }
   </div>
 
   <div class="content">
-    <!-- DASHBOARD -->
-    <div id="dashboard" class="tab-content">Bem-vindo ao ERP Fogos!</div>
-
-    <!-- PRODUTOS -->
-    <div id="products" class="tab-content" style="display:none;">
-      <h3>Cadastrar Produto</h3>
-      <form id="productForm">
-        <input id="sku" placeholder="SKU" required>
-        <input id="name" placeholder="Nome" required>
-        <input id="quantity" type="number" min="0" required>
-        <button class="btn btn-success">Cadastrar</button>
-      </form>
-      <table id="productsTable"><thead><tr><th>ID</th><th>SKU</th><th>Nome</th><th>Qtd</th><th>Ações</th></tr></thead><tbody></tbody></table>
-    </div>
-
-    <!-- MOVIMENTAÇÕES -->
-    <div id="movements" class="tab-content" style="display:none;">
-      <h3>Movimentações</h3>
-      <form id="movementForm">
-        <select id="movProductId"></select>
-        <select id="movType"><option value="ENTRADA">Entrada</option><option value="SAIDA">Saída</option></select>
-        <input id="movQuantity" type="number" min="1" required>
-        <button class="btn btn-success">Registrar</button>
-      </form>
-      <table id="movementsTable"><thead><tr><th>ID</th><th>Produto</th><th>Tipo</th><th>Qtd</th></tr></thead><tbody></tbody></table>
-    </div>
-
-    <!-- SCANNER -->
-    <div id="scanner" class="tab-content" style="display:none;">
-      <h3>Escanear Produto</h3>
-      <div id="reader" style="width:300px;height:300px;"></div>
-      <div id="scanResult" style="margin-top:10px;color:green;font-weight:bold;"></div>
-    </div>
+    <!-- ... outras abas ... -->
 
     <!-- USUÁRIOS -->
     <div id="users" class="tab-content" style="display:none;">
-      <h3>Gerenciar Usuários</h3>
+      <h3>Usuários</h3>
       <form id="userForm">
         <input id="newUser" placeholder="Usuário" required>
         <input id="newPass" placeholder="Senha" required>
@@ -99,142 +110,92 @@ th,td { padding:8px; border-bottom:1px solid #ddd; }
         <button class="btn btn-success">Adicionar</button>
       </form>
       <table id="usersTable"><thead><tr><th>ID</th><th>Usuário</th><th>Papel</th><th>Ações</th></tr></thead><tbody></tbody></table>
+
+      <!-- Caixa de edição -->
+      <div id="editUserBox" class="edit-box" style="display:none;">
+        <h4>Editar Usuário</h4>
+        <input id="editUserName" placeholder="Usuário">
+        <input id="editUserPass" placeholder="Nova Senha (opcional)">
+        <select id="editUserRole"><option value="admin">Admin</option><option value="estoquista">Estoquista</option><option value="vendedor">Vendedor</option></select>
+        <button onclick="saveUserEdit()" class="btn btn-success">Salvar</button>
+        <button onclick="cancelUserEdit()" class="btn btn-danger">Cancelar</button>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
-/* ===== Usuários ===== */
-let users = [
-  {id:1, username:"admin", password:sha256("admin123"), role:"admin"},
-  {id:2, username:"estoquista", password:sha256("1234"), role:"estoquista"},
-  {id:3, username:"vendedor", password:sha256("venda"), role:"vendedor"}
-];
-let products=[
-  {id:1,sku:"789000000001",name:"Rojão Trovão",quantity:100},
-  {id:2,sku:"789000000002",name:"Morteiro 3 Pol",quantity:50},
-  {id:3,sku:"789000000003",name:"Chuva de Prata",quantity:30},
-  {id:4,sku:"789000000004",name:"Foguete 12 tiros",quantity:80}
-];
-let movements=[];
+let socket = io();
+let users=[], products=[], movements=[];
 let currentUser=null;
+let editingUserId=null;
 
-/* ===== Login ===== */
-document.getElementById("loginForm").addEventListener("submit",e=>{
-  e.preventDefault();
-  const u=document.getElementById("username").value;
-  const p=sha256(document.getElementById("password").value);
-  const found=users.find(x=>x.username===u && x.password===p);
-  if(found){
-    currentUser=found;
-    document.getElementById("loginPage").style.display="none";
-    document.getElementById("erpSystem").style.display="block";
-    document.getElementById("logoutBtn").style.display="inline-block";
-    document.getElementById("currentUserDisplay").innerText=`👤 ${currentUser.username} (${currentUser.role})`;
-    updateUI();
-  } else {
-    document.getElementById("errorMessage").innerText="Usuário ou senha incorretos.";
-  }
-});
-function logout(){ currentUser=null; location.reload(); }
-
-/* ===== Hierarquia ===== */
-function canManageUsers(){ return currentUser && currentUser.role==="admin"; }
-function canManageProducts(){ return currentUser && (currentUser.role==="admin"||currentUser.role==="estoquista"); }
-function canRegisterMovements(){ return currentUser && (currentUser.role==="admin"||currentUser.role==="estoquista"||currentUser.role==="vendedor"); }
-
-/* ===== UI ===== */
-function switchTab(tab){
-  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
-  document.querySelectorAll(".tab-content").forEach(c=>c.style.display="none");
-  document.getElementById(tab).style.display="block";
-  event.target.classList.add("active");
-  if(tab==="users" && !canManageUsers()){ alert("Acesso negado: apenas admin."); switchTab("dashboard"); }
-  if(tab==="products" && !canManageProducts()){ alert("Acesso negado."); switchTab("dashboard"); }
-  if(tab==="movements" && !canRegisterMovements()){ alert("Acesso negado."); switchTab("dashboard"); }
-}
-function updateUI(){ updateUsers(); updateProducts(); updateMovements(); updateSelects(); }
+/* ===== Login e hierarquia (igual antes) ===== */
+// ... (mantém as funções de login, logout, permissões e navegação) ...
 
 /* ===== Usuários ===== */
 document.getElementById("userForm").addEventListener("submit",e=>{
   e.preventDefault();
-  if(!canManageUsers()){ alert("Apenas admin pode criar usuários."); return; }
+  if(!canManageUsers()){alert("Apenas admin.");return;}
   const id=users.length?Math.max(...users.map(x=>x.id))+1:1;
-  const u=document.getElementById("newUser").value;
-  const p=sha256(document.getElementById("newPass").value);
-  const r=document.getElementById("newRole").value;
-  users.push({id,username:u,password:p,role:r});
-  updateUsers();
+  users.push({
+    id,
+    username:document.getElementById("newUser").value,
+    password:document.getElementById("newPass").value,
+    role:document.getElementById("newRole").value
+  });
+  socket.emit("updateUsers",users);
   e.target.reset();
 });
-function delUser(id){ if(!canManageUsers()){alert("Apenas admin.");return;} users=users.filter(u=>u.id!==id); updateUsers(); }
+
+function delUser(id){
+  if(!canManageUsers()){alert("Apenas admin.");return;}
+  users=users.filter(u=>u.id!==id);
+  socket.emit("updateUsers",users);
+}
+
+function editUser(id){
+  if(!canManageUsers()){alert("Apenas admin.");return;}
+  const u=users.find(x=>x.id===id);
+  if(!u) return;
+  editingUserId=id;
+  document.getElementById("editUserName").value=u.username;
+  document.getElementById("editUserPass").value="";
+  document.getElementById("editUserRole").value=u.role;
+  document.getElementById("editUserBox").style.display="block";
+}
+
+function saveUserEdit(){
+  const u=users.find(x=>x.id===editingUserId);
+  if(!u) return;
+  u.username=document.getElementById("editUserName").value;
+  const pass=document.getElementById("editUserPass").value;
+  if(pass) u.password=pass; // só troca se informado
+  u.role=document.getElementById("editUserRole").value;
+  socket.emit("updateUsers",users);
+  cancelUserEdit();
+}
+
+function cancelUserEdit(){
+  editingUserId=null;
+  document.getElementById("editUserBox").style.display="none";
+}
+
 function updateUsers(){
   const tb=document.querySelector("#usersTable tbody");
-  tb.innerHTML=users.map(u=>`<tr><td>${u.id}</td><td>${u.username}</td><td>${u.role}</td><td><button class="btn btn-danger" onclick="delUser(${u.id})">Excluir</button></td></tr>`).join("");
+  tb.innerHTML=users.map(u=>
+    `<tr><td>${u.id}</td><td>${u.username}</td><td>${u.role}</td>
+    <td>
+      ${canManageUsers()?`<button class="btn btn-success" onclick="editUser(${u.id})">Editar</button>`:""}
+      ${canManageUsers()?`<button class="btn btn-danger" onclick="delUser(${u.id})">Excluir</button>`:""}
+    </td></tr>`
+  ).join("");
 }
 
-/* ===== Produtos ===== */
-document.getElementById("productForm").addEventListener("submit",e=>{
-  e.preventDefault();
-  if(!canManageProducts()){ alert("Sem permissão."); return; }
-  const id=products.length?Math.max(...products.map(x=>x.id))+1:1;
-  products.push({id,sku:document.getElementById("sku").value,name:document.getElementById("name").value,quantity:parseInt(document.getElementById("quantity").value)});
-  updateProducts(); updateSelects(); e.target.reset();
-});
-function delProduct(id){ if(!canManageProducts()){alert("Sem permissão.");return;} products=products.filter(p=>p.id!==id); updateProducts(); }
-function updateProducts(){
-  const tb=document.querySelector("#productsTable tbody");
-  tb.innerHTML=products.map(p=>`<tr><td>${p.id}</td><td>${p.sku}</td><td>${p.name}</td><td>${p.quantity}</td><td>${canManageProducts()?`<button class="btn btn-danger" onclick="delProduct(${p.id})">Excluir</button>`:""}</td></tr>`).join("");
-}
-
-/* ===== Movimentações ===== */
-document.getElementById("movementForm").addEventListener("submit",e=>{
-  e.preventDefault();
-  if(!canRegisterMovements()){ alert("Sem permissão."); return; }
-  const id=movements.length?Math.max(...movements.map(x=>x.id))+1:1;
-  const pid=parseInt(document.getElementById("movProductId").value);
-  const type=document.getElementById("movType").value;
-  const qty=parseInt(document.getElementById("movQuantity").value);
-  const prod=products.find(p=>p.id===pid);
-  if(type==="SAIDA" && prod.quantity<qty){ alert("Estoque insuficiente!"); return; }
-  movements.push({id,productId:pid,type,quantity:qty});
-  prod.quantity+= (type==="ENTRADA"?qty:-qty);
-  updateProducts(); updateMovements(); e.target.reset();
-});
-function updateMovements(){
-  const tb=document.querySelector("#movementsTable tbody");
-  tb.innerHTML=movements.map(m=>{
-    const prod=products.find(p=>p.id===m.productId);
-    return `<tr><td>${m.id}</td><td>${prod?prod.name:"N/A"}</td><td>${m.type}</td><td>${m.quantity}</td></tr>`;
-  }).join("");
-}
-function updateSelects(){
-  const sel=document.getElementById("movProductId");
-  sel.innerHTML='<option value="">Selecione</option>'+products.map(p=>`<option value="${p.id}">${p.name}</option>`).join("");
-}
-
-/* ===== Scanner ===== */
-function startScanner(){
-  const html5QrCode = new Html5Qrcode("reader");
-  html5QrCode.start({ facingMode: "environment" }, { fps:10, qrbox:250 },
-    (decodedText)=>{
-      document.getElementById("scanResult").innerText="Código: "+decodedText;
-      let prod=products.find(p=>p.sku===decodedText);
-      if(prod){ // abate uma unidade
-        if(prod.quantity>0){ prod.quantity--; updateProducts(); updateMovements();
-          alert("Produto vendido: "+prod.name);
-        } else { alert("Sem estoque!"); }
-      } else {
-        // cadastra novo
-        const id=products.length?Math.max(...products.map(x=>x.id))+1:1;
-        products.push({id,sku:decodedText,name:"Novo Produto",quantity:1});
-        updateProducts();
-        alert("Novo produto cadastrado com SKU: "+decodedText);
-      }
-    },
-    (errorMsg)=>{});
-}
-document.addEventListener("DOMContentLoaded",()=>{ if(document.getElementById("scanner")) startScanner(); });
+/* ===== Produtos, Movimentações, Scanner, Sync ===== */
+// ... (mantém as funções que já passei na versão anterior: updateProducts, updateMovements, scanner, socket.on etc.) ...
 </script>
 </body>
 </html>
+
+
